@@ -64,3 +64,9 @@ type Client interface {
 	Unwhitelist(string) error
 	GetFullState(context.Context) (interface{}, error)
 }
+
+type Bridge struct {
+	ID                string `json:"id"`
+	InternalIPAddress string `json:"internalipaddress"`
+	MacAddress        string `json:"macaddress"`
+}
