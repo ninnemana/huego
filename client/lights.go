@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/trace"
-	light "github.com/ninnemana/gohbridge/services/lights"
 	"github.com/ninnemana/huego"
 	"github.com/pkg/errors"
 )
@@ -53,7 +52,7 @@ func (c *client) AllLights(ctx context.Context) ([]interface{}, error) {
 		return nil, errors.New(string(data))
 	}
 
-	lights := make(map[string]light.Light, 0)
+	lights := make(map[string]interface{}, 0)
 	err = json.NewDecoder(resp.Body).Decode(&lights)
 	if err != nil {
 		return nil, err
@@ -66,8 +65,13 @@ func (c *client) AllLights(ctx context.Context) ([]interface{}, error) {
 			return nil, errors.Errorf("failed to parse light key into identifier '%s'", key)
 		}
 
-		l.ID = int32(id)
-		results = append(results, l)
+		lmp, ok := l.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		lmp["ID"] = int32(id)
+		results = append(results, lmp)
 	}
 
 	return results, nil
@@ -111,8 +115,8 @@ func (c *client) NewLights(ctx context.Context) (interface{}, error) {
 		return nil, errors.New(string(data))
 	}
 
-	var scan *light.Scan
-	err = json.NewDecoder(resp.Body).Decode(scan)
+	var scan map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&scan)
 	if err != nil {
 		return nil, err
 	}
@@ -217,12 +221,12 @@ func (c *client) GetLight(ctx context.Context, id int) (interface{}, error) {
 		return nil, err
 	}
 
-	var l *light.Light
+	var l map[string]interface{}
 	if err := json.Unmarshal(data, &l); err != nil {
 		return nil, errors.Errorf("failed to encode '%s' to Light: %v", data, err)
 	}
 
-	l.ID = int32(id)
+	l["ID"] = int32(id)
 
 	return l, nil
 }
@@ -327,17 +331,24 @@ func (c *client) Toggle(ctx context.Context, id int) (interface{}, error) {
 		return nil, err
 	}
 
-	existing, ok := res.(*light.Light)
+	existing, ok := res.(map[string]interface{})
 	if !ok {
 		return nil, errors.Errorf("failed to convert '%T' to *light.Light", res)
 	}
 
 	alreadyOn := false
-	switch {
-	case existing.GetState() == nil:
-	case existing.GetState().GetOn():
+	existingMap, ok := existing["state"].(map[string]interface{})
+	if !ok {
+		return nil, errors.Errorf("existing could not be mapped from '%T' to map[string]interface{}", existing)
+	}
+
+	on, ok := existingMap["on"].(bool)
+	if !ok {
+		return nil, errors.Errorf("existing could not be mapped from '%T' to bool", existingMap["on"])
+	}
+
+	if on {
 		alreadyOn = true
-	case !existing.GetState().GetOn():
 	}
 
 	client := http.Client{

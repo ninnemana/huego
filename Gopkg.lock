@@ -70,14 +70,6 @@
   version = "1.0.1"
 
 [[projects]]
-  branch = "feature/mock-hue-api"
-  digest = "1:6fb3f263f274f73697d36894bf5dc6872c28e9ef521ff4ee8b01110616fd1f61"
-  name = "github.com/ninnemana/gohbridge"
-  packages = ["services/lights"]
-  pruneopts = "UT"
-  revision = "fb139f5fae3ebcf85b8556522816ba66097c1cd0"
-
-[[projects]]
   digest = "1:eaefc85d32c03e5f0c2b88ea2f79fce3d993e2c78316d21319575dd4ea9153ca"
   name = "github.com/ninnemana/json-iterator"
   packages = ["."]
@@ -295,9 +287,10 @@
   input-imports = [
     "cloud.google.com/go/trace",
     "contrib.go.opencensus.io/exporter/stackdriver",
-    "github.com/ninnemana/gohbridge/services/lights",
     "github.com/ninnemana/json-iterator",
     "github.com/pkg/errors",
+    "go.opencensus.io/plugin/ochttp",
+    "go.opencensus.io/stats/view",
     "go.opencensus.io/trace",
   ]
   solver-name = "gps-cdcl"
