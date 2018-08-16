@@ -68,8 +68,6 @@ func (c *client) AllBridges(ctx context.Context, q interface{}) ([]interface{}, 
 		return nil, err
 	}
 
-	fmt.Println(resp.StatusCode)
-
 	if resp.StatusCode != 200 {
 		data, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
