@@ -8,10 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"cloud.google.com/go/trace"
 	"github.com/ninnemana/huego"
+
 	jsoniter "github.com/ninnemana/json-iterator"
 	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ochttp"
+	"go.opencensus.io/trace"
 )
 
 var (
@@ -19,18 +21,24 @@ var (
 )
 
 func (c *client) AllBridges(ctx context.Context, q interface{}) ([]interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.bridges.all")
-	defer span.Finish()
+	span := trace.NewSpan(
+		"hue.http.bridges.all",
+		trace.FromContext(ctx),
+		trace.StartOptions{},
+	)
+	defer span.End()
 
 	params, ok := q.(*hue.AllBridgeParams)
 	if !ok {
 		return nil, errors.Errorf("provided params were expected to be *AllBridgeParams, received '%T'", params)
 	}
 
-	client := http.Client{
-		Timeout: time.Second * 5,
+	// Automatically add a Stackdriver trace header to outgoing requests:
+	client := &http.Client{
+		Transport: &ochttp.Transport{},
 	}
 
+	span.AddAttributes(trace.StringAttribute("method", params.Method))
 	var discoverEndpoint string
 	switch strings.ToLower(params.Method) {
 	// case "upnp":
@@ -68,6 +76,7 @@ func (c *client) AllBridges(ctx context.Context, q interface{}) ([]interface{}, 
 		return nil, err
 	}
 
+	span.AddAttributes(trace.Int64Attribute("statusCode", int64(resp.StatusCode)))
 	if resp.StatusCode != 200 {
 		data, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
@@ -82,6 +91,10 @@ func (c *client) AllBridges(ctx context.Context, q interface{}) ([]interface{}, 
 		return nil, err
 	}
 
+	span.AddAttributes(
+		trace.Int64Attribute("count", int64(len(bridges))),
+	)
+
 	return bridges, nil
 }
 
@@ -90,8 +103,12 @@ func (c *client) CreateUser(interface{}) (interface{}, error) {
 }
 
 func (c *client) GetConfig(ctx context.Context) (interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.bridges.config")
-	defer span.Finish()
+	span := trace.NewSpan(
+		"hue.http.bridges.config",
+		trace.FromContext(ctx),
+		trace.StartOptions{},
+	)
+	defer span.End()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
@@ -144,8 +161,12 @@ func (c *client) Unwhitelist(string) error {
 }
 
 func (c *client) GetFullState(ctx context.Context) (interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.bridges.state")
-	defer span.Finish()
+	span := trace.NewSpan(
+		"hue.http.bridges.state",
+		trace.FromContext(ctx),
+		trace.StartOptions{},
+	)
+	defer span.End()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
