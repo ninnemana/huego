@@ -10,14 +10,21 @@ import (
 	"strconv"
 	"time"
 
-	"cloud.google.com/go/trace"
 	"github.com/ninnemana/huego"
+
 	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ochttp"
+	"go.opencensus.io/trace"
 )
 
 func (c *client) AllLights(ctx context.Context) ([]interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.lights.all")
-	defer span.Finish()
+	ctx, span := trace.StartSpan(ctx, "hue.http.lights.all")
+	now := time.Now().UTC()
+
+	defer func() {
+		span.AddAttributes(trace.Int64Attribute("timeSpent (ms)", time.Since(now).Nanoseconds()/int64(time.Millisecond)))
+		span.End()
+	}()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
@@ -51,11 +58,12 @@ func (c *client) AllLights(ctx context.Context) ([]interface{}, error) {
 		}
 		return nil, errors.New(string(data))
 	}
+	defer resp.Body.Close()
 
 	lights := make(map[string]interface{}, 0)
 	err = json.NewDecoder(resp.Body).Decode(&lights)
 	if err != nil {
-		return nil, err
+		return nil, errors.Errorf("failed to decode result: %v", err)
 	}
 
 	results := []interface{}{}
@@ -78,8 +86,8 @@ func (c *client) AllLights(ctx context.Context) ([]interface{}, error) {
 }
 
 func (c *client) NewLights(ctx context.Context) (interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.lights.new")
-	defer span.Finish()
+	ctx, span := trace.StartSpan(ctx, "hue.http.lights.new")
+	defer span.End()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
@@ -92,7 +100,8 @@ func (c *client) NewLights(ctx context.Context) (interface{}, error) {
 	}
 
 	client := http.Client{
-		Timeout: time.Second * 5,
+		Timeout:   time.Second * 5,
+		Transport: &ochttp.Transport{},
 	}
 
 	req, err := http.NewRequest(
@@ -125,8 +134,8 @@ func (c *client) NewLights(ctx context.Context) (interface{}, error) {
 }
 
 func (c *client) SearchLights(ctx context.Context, deviceIDs []string) error {
-	span := trace.FromContext(ctx).NewChild("hue.http.lights.search")
-	defer span.Finish()
+	ctx, span := trace.StartSpan(ctx, "hue.http.lights.search")
+	defer span.End()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
@@ -180,8 +189,8 @@ func (c *client) SearchLights(ctx context.Context, deviceIDs []string) error {
 }
 
 func (c *client) GetLight(ctx context.Context, id int) (interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.lights.get")
-	defer span.Finish()
+	ctx, span := trace.StartSpan(ctx, "hue.http.lights.get")
+	defer span.End()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
@@ -231,13 +240,13 @@ func (c *client) GetLight(ctx context.Context, id int) (interface{}, error) {
 	return l, nil
 }
 
-func (c *client) RenameLight(string, string) (interface{}, error) {
+func (c *client) RenameLight(ctx context.Context, id string, newName string) (interface{}, error) {
 	return nil, hue.ErrNotImplemented
 }
 
 func (c *client) LightState(ctx context.Context, id int, state interface{}) (interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.lights.state")
-	defer span.Finish()
+	ctx, span := trace.StartSpan(ctx, "hue.http.lights.state")
+	defer span.End()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
@@ -313,8 +322,8 @@ func (c *client) LightState(ctx context.Context, id int, state interface{}) (int
 }
 
 func (c *client) Toggle(ctx context.Context, id int) (interface{}, error) {
-	span := trace.FromContext(ctx).NewChild("hue.http.lights.toggle")
-	defer span.Finish()
+	ctx, span := trace.StartSpan(ctx, "hue.http.lights.toggle")
+	defer span.End()
 
 	user, ok := ctx.Value(hue.UserKey{}).(string)
 	if !ok {
@@ -411,6 +420,44 @@ func (c *client) Toggle(ctx context.Context, id int) (interface{}, error) {
 	return c.GetLight(ctx, id)
 }
 
-func (c *client) DeleteLight(string) error {
-	return hue.ErrNotImplemented
+// DeleteLight removes a light from the registered devices on the authenticated bridge.
+// DELETE /api/<username>/lights/<id>
+func (c *client) DeleteLight(ctx context.Context, id string) error {
+	ctx, span := trace.StartSpan(ctx, "hue.http.lights.delete")
+	defer span.End()
+
+	user, ok := ctx.Value(hue.UserKey{}).(string)
+	if !ok {
+		return hue.ErrNoUser
+	}
+
+	host, ok := ctx.Value(hue.HostKey{}).(string)
+	if !ok {
+		return hue.ErrNoHost
+	}
+
+	client := http.Client{
+		Timeout: time.Second * 5,
+	}
+
+	path := fmt.Sprintf("%s/api/%s/lights/%s", host, user, id)
+	req, err := http.NewRequest(http.MethodDelete, path, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != 200 {
+		data, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return errors.New("failed to delete light")
+		}
+		return errors.New(string(data))
+	}
+
+	return nil
 }
