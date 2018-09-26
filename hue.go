@@ -18,17 +18,17 @@ type Client interface {
 	NewLights(context.Context) (interface{}, error)
 	SearchLights(context.Context, []string) error
 	GetLight(context.Context, int) (interface{}, error)
-	RenameLight(string, string) (interface{}, error)
+	RenameLight(context.Context, string, string) (interface{}, error)
 	LightState(context.Context, int, interface{}) (interface{}, error)
 	Toggle(context.Context, int) (interface{}, error)
-	DeleteLight(string) error
+	DeleteLight(context.Context, string) error
 
-	AllGroups() ([]interface{}, error)
-	CreateGroup(interface{}) (interface{}, error)
-	GetGroup(string) (interface{}, error)
-	SaveGroup(string, interface{}) (interface{}, error)
-	SetGroupState(string, interface{}) (interface{}, error)
-	DeleteGroup(string) error
+	AllGroups(context.Context) ([]interface{}, error)
+	CreateGroup(context.Context, interface{}) (interface{}, error)
+	GetGroup(context.Context, string) (interface{}, error)
+	SaveGroup(context.Context, string, interface{}) (interface{}, error)
+	SetGroupState(context.Context, string, interface{}) (interface{}, error)
+	DeleteGroup(context.Context, string) error
 
 	AllSchedules() ([]interface{}, error)
 	CreateSchedule(interface{}) (interface{}, error)
